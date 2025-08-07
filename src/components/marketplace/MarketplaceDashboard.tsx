@@ -33,6 +33,7 @@ import { useBlockchain } from "@/contexts/BlockchainContext";
 import { ProductListing, Order } from "@/contexts/BlockchainContext";
 import { MetaMaskGuide } from "@/components/ui/metamask-guide";
 import { WalletDebug } from "@/components/ui/wallet-debug";
+import { WalletConnection } from "@/components/ui/wallet-connection";
 
 interface MarketplaceStats {
   totalProducts: number;
@@ -76,6 +77,7 @@ export const MarketplaceDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState("marketplace");
   const [showMetaMaskGuide, setShowMetaMaskGuide] = useState(false);
   const [showWalletDebug, setShowWalletDebug] = useState(false);
+  const [showWalletConnection, setShowWalletConnection] = useState(false);
 
   const categories = ["all", "Antibiotics", "Consumables", "Equipment", "Diabetes Care", "Pain Management", "Cardiovascular", "Respiratory"];
 
@@ -215,7 +217,7 @@ export const MarketplaceDashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="flex gap-2">
-                  <Button onClick={handleConnectWallet} variant="outline" disabled={isLoading}>
+                  <Button onClick={() => setShowWalletConnection(true)} variant="outline" disabled={isLoading}>
                     <Wallet className="h-4 w-4 mr-2" />
                     {isLoading ? "Connecting..." : "Connect Wallet"}
                   </Button>
@@ -584,6 +586,11 @@ export const MarketplaceDashboard: React.FC = () => {
       {/* Wallet Debug */}
       {showWalletDebug && (
         <WalletDebug onClose={() => setShowWalletDebug(false)} />
+      )}
+
+      {/* Wallet Connection */}
+      {showWalletConnection && (
+        <WalletConnection onClose={() => setShowWalletConnection(false)} />
       )}
     </div>
   );

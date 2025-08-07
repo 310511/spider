@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Package, 
   AlertTriangle, 
@@ -15,7 +17,10 @@ import {
   XCircle,
   Clock,
   Truck,
-  Users
+  Users,
+  Search,
+  Filter,
+  X
 } from "lucide-react";
 
 interface MedicalSupply {
@@ -77,6 +82,12 @@ const InventoryDashboard: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("supplies");
+  
+  // Search and filter states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchCategory, setSearchCategory] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [severityFilter, setSeverityFilter] = useState("all");
 
   useEffect(() => {
     fetchInventoryData();
@@ -201,6 +212,70 @@ const InventoryDashboard: React.FC = () => {
     );
   };
 
+  // Search and filter logic
+  const filteredSupplies = useMemo(() => {
+    return supplies.filter(supply => {
+      const matchesSearch = searchQuery === "" || 
+        supply.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        supply.supplier_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        supply.unit.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesCategory = searchCategory === "all" || searchCategory === "supplies";
+      const matchesStatus = statusFilter === "all" || supply.status === statusFilter;
+      
+      return matchesSearch && matchesCategory && matchesStatus;
+    });
+  }, [supplies, searchQuery, searchCategory, statusFilter]);
+
+  const filteredAlerts = useMemo(() => {
+    return alerts.filter(alert => {
+      const matchesSearch = searchQuery === "" || 
+        alert.item_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        alert.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        alert.type.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesCategory = searchCategory === "all" || searchCategory === "alerts";
+      const matchesSeverity = severityFilter === "all" || alert.severity === severityFilter;
+      
+      return matchesSearch && matchesCategory && matchesSeverity;
+    });
+  }, [alerts, searchQuery, searchCategory, severityFilter]);
+
+  const filteredOrders = useMemo(() => {
+    return purchaseOrders.filter(order => {
+      const matchesSearch = searchQuery === "" || 
+        order.item_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.supplier_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.order_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.status.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesCategory = searchCategory === "all" || searchCategory === "orders";
+      const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+      
+      return matchesSearch && matchesCategory && matchesStatus;
+    });
+  }, [purchaseOrders, searchQuery, searchCategory, statusFilter]);
+
+  const filteredSuppliers = useMemo(() => {
+    return suppliers.filter(supplier => {
+      const matchesSearch = searchQuery === "" || 
+        supplier.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (supplier.email && supplier.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (supplier.phone && supplier.phone.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      const matchesCategory = searchCategory === "all" || searchCategory === "suppliers";
+      
+      return matchesSearch && matchesCategory;
+    });
+  }, [suppliers, searchQuery, searchCategory]);
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchCategory("all");
+    setStatusFilter("all");
+    setSeverityFilter("all");
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -231,54 +306,155 @@ const InventoryDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Search and Filter Bar */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Search Input */}
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                placeholder="Search inventory items, suppliers, orders, alerts..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-10"
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6"
+                  onClick={() => setSearchQuery("")}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+
+            {/* Category Filter */}
+            <Select value={searchCategory} onValueChange={setSearchCategory}>
+              <SelectTrigger className="w-full lg:w-40">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="supplies">Supplies</SelectItem>
+                <SelectItem value="alerts">Alerts</SelectItem>
+                <SelectItem value="orders">Orders</SelectItem>
+                <SelectItem value="suppliers">Suppliers</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Status Filter */}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full lg:w-40">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="low_stock">Low Stock</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="sent">Sent</SelectItem>
+                <SelectItem value="confirmed">Confirmed</SelectItem>
+                <SelectItem value="received">Received</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Severity Filter */}
+            <Select value={severityFilter} onValueChange={setSeverityFilter}>
+              <SelectTrigger className="w-full lg:w-40">
+                <SelectValue placeholder="Severity" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Severity</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="critical">Critical</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Clear Filters */}
+            {(searchQuery || searchCategory !== "all" || statusFilter !== "all" || severityFilter !== "all") && (
+              <Button variant="outline" onClick={clearSearch} className="w-full lg:w-auto">
+                <X className="h-4 w-4 mr-2" />
+                Clear Filters
+              </Button>
+            )}
+          </div>
+
+          {/* Search Results Summary */}
+          {searchQuery && (
+            <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Search className="h-4 w-4" />
+                <span>
+                  Found {filteredSupplies.length} supplies, {filteredAlerts.length} alerts, {filteredOrders.length} orders, {filteredSuppliers.length} suppliers
+                </span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Supplies</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {searchQuery ? "Filtered Supplies" : "Total Supplies"}
+            </CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{supplies.length}</div>
+            <div className="text-2xl font-bold">{filteredSupplies.length}</div>
             <p className="text-xs text-muted-foreground">
-              {supplies.filter(s => s.status === "low_stock").length} low stock
+              {filteredSupplies.filter(s => s.status === "low_stock").length} low stock
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Alerts</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {searchQuery ? "Filtered Alerts" : "Active Alerts"}
+            </CardTitle>
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{alerts.length}</div>
+            <div className="text-2xl font-bold">{filteredAlerts.length}</div>
             <p className="text-xs text-muted-foreground">
-              {alerts.filter(a => a.severity === "critical").length} critical
+              {filteredAlerts.filter(a => a.severity === "critical").length} critical
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Purchase Orders</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {searchQuery ? "Filtered Orders" : "Purchase Orders"}
+            </CardTitle>
             <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{purchaseOrders.length}</div>
+            <div className="text-2xl font-bold">{filteredOrders.length}</div>
             <p className="text-xs text-muted-foreground">
-              {purchaseOrders.filter(o => o.status === "pending").length} pending
+              {filteredOrders.filter(o => o.status === "pending").length} pending
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Suppliers</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {searchQuery ? "Filtered Suppliers" : "Suppliers"}
+            </CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{suppliers.length}</div>
+            <div className="text-2xl font-bold">{filteredSuppliers.length}</div>
             <p className="text-xs text-muted-foreground">Active suppliers</p>
           </CardContent>
         </Card>
@@ -314,22 +490,30 @@ const InventoryDashboard: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {supplies.map((supply) => (
-                    <TableRow key={supply.id}>
-                      <TableCell className="font-medium">{supply.name}</TableCell>
-                      <TableCell>{supply.current_stock} {supply.unit}</TableCell>
-                      <TableCell>{supply.threshold_quantity} {supply.unit}</TableCell>
-                      <TableCell>{supply.supplier_name}</TableCell>
-                      <TableCell>
-                        {supply.expiry_date ? new Date(supply.expiry_date).toLocaleDateString() : "N/A"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={supply.status === "low_stock" ? "destructive" : "default"}>
-                          {supply.status}
-                        </Badge>
+                  {filteredSupplies.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        {searchQuery ? "No supplies found matching your search criteria." : "No supplies available."}
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    filteredSupplies.map((supply) => (
+                      <TableRow key={supply.id}>
+                        <TableCell className="font-medium">{supply.name}</TableCell>
+                        <TableCell>{supply.current_stock} {supply.unit}</TableCell>
+                        <TableCell>{supply.threshold_quantity} {supply.unit}</TableCell>
+                        <TableCell>{supply.supplier_name}</TableCell>
+                        <TableCell>
+                          {supply.expiry_date ? new Date(supply.expiry_date).toLocaleDateString() : "N/A"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={supply.status === "low_stock" ? "destructive" : "default"}>
+                            {supply.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -345,17 +529,22 @@ const InventoryDashboard: React.FC = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {alerts.length === 0 ? (
+              {filteredAlerts.length === 0 ? (
                 <Alert>
                   <CheckCircle className="h-4 w-4" />
-                  <AlertTitle>No Active Alerts</AlertTitle>
+                  <AlertTitle>
+                    {searchQuery ? "No Alerts Found" : "No Active Alerts"}
+                  </AlertTitle>
                   <AlertDescription>
-                    All inventory levels are within acceptable ranges.
+                    {searchQuery 
+                      ? "No alerts match your search criteria." 
+                      : "All inventory levels are within acceptable ranges."
+                    }
                   </AlertDescription>
                 </Alert>
               ) : (
                 <div className="space-y-4">
-                  {alerts.map((alert) => (
+                  {filteredAlerts.map((alert) => (
                     <Alert key={alert.alert_id}>
                       <AlertTriangle className="h-4 w-4" />
                       <AlertTitle className="flex items-center justify-between">
@@ -394,12 +583,17 @@ const InventoryDashboard: React.FC = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {purchaseOrders.length === 0 ? (
+              {filteredOrders.length === 0 ? (
                 <Alert>
                   <ShoppingCart className="h-4 w-4" />
-                  <AlertTitle>No Purchase Orders</AlertTitle>
+                  <AlertTitle>
+                    {searchQuery ? "No Orders Found" : "No Purchase Orders"}
+                  </AlertTitle>
                   <AlertDescription>
-                    No purchase orders have been created yet.
+                    {searchQuery 
+                      ? "No purchase orders match your search criteria." 
+                      : "No purchase orders have been created yet."
+                    }
                   </AlertDescription>
                 </Alert>
               ) : (
@@ -415,7 +609,7 @@ const InventoryDashboard: React.FC = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {purchaseOrders.map((order) => (
+                    {filteredOrders.map((order) => (
                       <TableRow key={order.order_id}>
                         <TableCell className="font-medium">{order.order_id}</TableCell>
                         <TableCell>{order.item_name}</TableCell>
@@ -454,15 +648,23 @@ const InventoryDashboard: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {suppliers.map((supplier) => (
-                    <TableRow key={supplier.id}>
-                      <TableCell className="font-medium">{supplier.name}</TableCell>
-                      <TableCell>{supplier.email || "N/A"}</TableCell>
-                      <TableCell>{supplier.phone || "N/A"}</TableCell>
-                      <TableCell>{supplier.default_order_quantity}</TableCell>
-                      <TableCell>{supplier.lead_time_days} days</TableCell>
+                  {filteredSuppliers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        {searchQuery ? "No suppliers found matching your search criteria." : "No suppliers available."}
+                      </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    filteredSuppliers.map((supplier) => (
+                      <TableRow key={supplier.id}>
+                        <TableCell className="font-medium">{supplier.name}</TableCell>
+                        <TableCell>{supplier.email || "N/A"}</TableCell>
+                        <TableCell>{supplier.phone || "N/A"}</TableCell>
+                        <TableCell>{supplier.default_order_quantity}</TableCell>
+                        <TableCell>{supplier.lead_time_days} days</TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </CardContent>

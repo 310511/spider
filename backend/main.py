@@ -19,11 +19,13 @@ import re
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import uvicorn
+import asyncio
+from typing import List
 
 # Import medicine recommendation system
 from medicine_recommendation_system import medicine_engine
@@ -47,6 +49,31 @@ app.add_middleware(
 memory_data = {}
 tasks_data = {}
 alerts_data = []
+
+# WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def send_personal_message(self, message: str, websocket: WebSocket):
+        await websocket.send_text(message)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except:
+                # Remove disconnected connections
+                self.active_connections.remove(connection)
+
+manager = ConnectionManager()
 
 class ProcessTextRequest(BaseModel):
     user_id: str
@@ -325,6 +352,25 @@ def generate_smart_answer(query: str, user_memories: List[Dict]) -> str:
 def read_root():
     return {"message": "Welcome to the INFINITE-MEMORY API - Improved Version 2.0"}
 
+@app.websocket("/ws/notifications")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time notifications"""
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection alive
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+async def broadcast_notification(notification_data: dict):
+    """Broadcast notification to all connected clients"""
+    message = json.dumps({
+        "type": "notification",
+        "data": notification_data
+    })
+    await manager.broadcast(message)
+
 @app.post("/process-text")
 async def process_text(request: ProcessTextRequest):
     """Process text input and return analysis"""
@@ -352,6 +398,17 @@ async def process_text(request: ProcessTextRequest):
                 "acknowledged": False
             }
             alerts_data.append(alert)
+            
+            # Broadcast notification
+            await broadcast_notification({
+                "id": alert["alert_id"],
+                "notification_type": "system",
+                "title": "High Urgency Alert",
+                "message": alert["message"],
+                "timestamp": alert["timestamp"],
+                "severity": "critical",
+                "action_url": f"/admin/alerts?alert={alert['alert_id']}"
+            })
         
         return analysis
     except Exception as e:
@@ -783,7 +840,30 @@ async def dismiss_alert(request: DismissAlertRequest):
 async def run_alert_check():
     """Manually trigger alert checks"""
     try:
+        # Store original alerts count
+        original_count = len(alerts_service.get_all_alerts())
+        
+        # Run the check
         alerts_service.run_manual_check()
+        
+        # Get new alerts
+        new_alerts = alerts_service.get_all_alerts()
+        new_count = len(new_alerts)
+        
+        # Broadcast notifications for new alerts
+        if new_count > original_count:
+            for alert in new_alerts[original_count:]:
+                await broadcast_notification({
+                    "id": alert.alert_id,
+                    "notification_type": "low_stock" if alert.type == AlertType.LOW_STOCK else "expiry",
+                    "title": "Low Stock Alert" if alert.type == AlertType.LOW_STOCK else "Expiry Warning",
+                    "message": alert.message,
+                    "timestamp": alert.created_at.isoformat(),
+                    "severity": alert.severity,
+                    "action_url": f"/inventory?item={alert.item_id}",
+                    "item_id": alert.item_id
+                })
+        
         return {"message": "Alert checks completed successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Alert check error: {str(e)}")

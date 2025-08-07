@@ -6,7 +6,14 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import { ethers } from "ethers";
+import { ethers, BrowserProvider } from "ethers";
+
+// Extend Window interface for ethereum
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
 
 // Types for marketplace integration
 export interface ProductListing {
@@ -60,7 +67,7 @@ interface IBlockchainContext {
   // Wallet and connection
   address: string | null;
   signer: ethers.Signer | null;
-  provider: ethers.providers.Web3Provider | null;
+  provider: BrowserProvider | null;
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
   refreshWalletConnection: () => Promise<void>;
@@ -95,6 +102,7 @@ const defaultBlockchainContextState: IBlockchainContext = {
   provider: null,
   connectWallet: async () => {},
   disconnectWallet: () => {},
+  refreshWalletConnection: async () => {},
   isLoading: false,
   setIsLoading: () => {},
   appNotifications: [],
@@ -117,7 +125,7 @@ const BlockchainContext = createContext<IBlockchainContext>(defaultBlockchainCon
 export const BlockchainProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [address, setAddress] = useState<string | null>(null);
   const [signer, setSigner] = useState<ethers.Signer | null>(null);
-  const [provider, setProvider] = useState<ethers.providers.Web3Provider | null>(null);
+  const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [appNotifications, setAppNotifications] = useState<AppNotification[]>([]);
   const [marketplaceContract, setMarketplaceContract] = useState<ethers.Contract | null>(null);
@@ -239,8 +247,8 @@ export const BlockchainProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
 
       // Create provider and signer
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
       
       // Get the connected address
       const connectedAddress = await signer.getAddress();
@@ -256,16 +264,41 @@ export const BlockchainProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const network = await provider.getNetwork();
       console.log("Connected to network:", network);
       
+      // Set up event listeners for account and chain changes
+      window.ethereum.on('accountsChanged', (accounts: string[]) => {
+        if (accounts.length === 0) {
+          // User disconnected
+          disconnectWallet();
+        } else {
+          // User switched accounts
+          setAddress(accounts[0]);
+          addAppNotification("Account changed", "info");
+        }
+      });
+
+      window.ethereum.on('chainChanged', () => {
+        window.location.reload();
+      });
+      
     } catch (error: any) {
       console.error("Error connecting wallet:", error);
       
+      let errorMessage = "Failed to connect wallet";
+      
       if (error.code === 4001) {
-        addAppNotification("Connection rejected by user.", "error");
+        errorMessage = "Connection rejected by user";
       } else if (error.code === -32002) {
-        addAppNotification("Please check MetaMask and try again.", "error");
-      } else {
-        addAppNotification("Failed to connect wallet. Please try again.", "error");
+        errorMessage = "Please check MetaMask and try again";
+      } else if (error.code === -32603) {
+        errorMessage = "Internal JSON-RPC error. Please try again";
+      } else if (error.message?.includes("User rejected")) {
+        errorMessage = "Connection was rejected";
+      } else if (error.message?.includes("already pending")) {
+        errorMessage = "Connection request already pending";
       }
+      
+      addAppNotification(errorMessage, "error");
+      throw error; // Re-throw for the UI component to handle
     } finally {
       setIsLoading(false);
     }
@@ -487,8 +520,8 @@ export const BlockchainProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           });
           
           if (accounts.length > 0) {
-            const provider = new ethers.providers.Web3Provider(window.ethereum);
-            const signer = provider.getSigner();
+            const provider = new BrowserProvider(window.ethereum);
+            const signer = await provider.getSigner();
             const address = await signer.getAddress();
             
             setProvider(provider);

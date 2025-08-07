@@ -148,6 +148,9 @@ class AlertsService:
                     )
                     self.alerts.append(alert)
                     print(f"Created low stock alert for {supply.name}")
+                    
+                    # Broadcast notification (this will be handled by the main app)
+                    self._broadcast_alert_notification(alert)
     
     def _check_expiry_alerts(self):
         """Check for items expiring soon and create alerts"""
@@ -174,6 +177,9 @@ class AlertsService:
                     )
                     self.alerts.append(alert)
                     print(f"Created expiry alert for {supply.name}")
+                    
+                    # Broadcast notification (this will be handled by the main app)
+                    self._broadcast_alert_notification(alert)
     
     def _get_existing_alert(self, item_id: str, alert_type: AlertType) -> Optional[Alert]:
         """Check if an alert already exists for the given item and type"""
@@ -244,6 +250,12 @@ class AlertsService:
             "expiry_alerts": expiry_alerts,
             "dismissed_alerts": total_alerts - active_alerts
         }
+    
+    def _broadcast_alert_notification(self, alert: Alert):
+        """Broadcast alert notification (placeholder for WebSocket integration)"""
+        # This method will be called by the main app to broadcast notifications
+        # The actual broadcasting is handled in the main.py file
+        pass
 
 # Global instance
 alerts_service = AlertsService() 
